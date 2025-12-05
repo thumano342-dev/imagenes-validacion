@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <title>Subir ZIP → GitHub → Excel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body style="font-family: Arial; padding: 20px">
+    <h2>Subir ZIP y generar Excel con links permanentes</h2>
+
+    <label><b>Selecciona archivo ZIP de imágenes:</b></label><br>
+    <input type="file" id="zipInput" accept=".zip" /><br><br>
+
+    <button onclick="procesarZip()">Procesar ZIP</button>
+
+    <p id="status"></p>
+
+    <script>
+        const GITHUB_USERNAME = "thumano342-dev";
+        const REPO_NAME = "imagenes-validacion";
+        const BRANCH = "main";
+
+        // 🔥 PEGA AQUÍ TU TOKEN NUEVO
+        const GITHUB_TOKEN = prompt("Introduce tu token de GitHub:");
+
+
+        const extensionesValidas = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
+
+        async function subirAGithub(path, archivoBase64) {
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${path}`;
+
+            
+            const contenido = {
+                message: "Subida automática",
+                content: archivoBase64
+            };
+
+            const res = await fetch(url, {
+                method: "PUT",
+                headers: {
+                    "Authorization": `Bearer ${GITHUB_TOKEN}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(contenido)
+            });
+
+            if (!res.ok) {
+                console.error(await res.text());
+                throw new Error("Error subiendo " + path);
+            }
+
+            return res.json();
+        }
+
+        async function procesarZip() {
+            const file = document.getElementById("zipInput").files[0];
+            if (!file) {
+                alert("Selecciona un ZIP primero.");
+                return;
+            }
+
+            document.getElementById("status").innerText = "Extrayendo ZIP...";
+
+            const zip = new JSZip();
+            const contenidoZip = await zip.loadAsync(file);
+
+            const rutasExcel = [];
+            let totalArchivos = Object.keys(contenidoZip.files).length;
+            let procesados = 0;
+
+            for (const nombre in contenidoZip.files) {
+                const archivo = contenidoZip.files[nombre];
+
+                if (archivo.dir) {
+                    procesados++;
+                    continue;
+                }
+
+                const ext = nombre.split(".").pop().toLowerCase();
+
+                // Evitar archivos de OneDrive
+                if (nombre.startsWith("._") || nombre.includes("__MACOSX")) {
+                    procesados++;
+                    continue;
+                }
+
+                // Solo permitir imágenes
+                if (!extensionesValidas.includes(ext)) {
+                    procesados++;
+                    continue;
+                }
+
+                // Mostrar progreso
+                document.getElementById("status").innerText = `Procesando (${procesados}/${totalArchivos}): ${nombre}`;
+
+                const arrayBuffer = await archivo.async("arraybuffer");
+                const bytes = new Uint8Array(arrayBuffer);
+                const base64 = btoa(String.fromCharCode(...bytes));
+
+                // Sanitizar nombre
+                const cleanName = nombre.replace(/.*\//, "").replace(/[^\w.-]/g, "_");
+                const rutaGitHub = "imagenes/" + cleanName;
+
+                await subirAGithub(rutaGitHub, base64);
+
+                const rawLink = `https://raw.githubusercontent.com/${GITHUB_USERNAME}/${REPO_NAME}/${BRANCH}/${rutaGitHub}`;
+                rutasExcel.push({ nombre: cleanName, url: rawLink });
+
+                procesados++;
+            }
+
+            generarExcel(rutasExcel);
+            document.getElementById("status").innerText = "✔ Proceso completado. Excel generado.";
+        }
+
+        function generarExcel(lista) {
+            const datos = [["Archivo", "Link permanente"]];
+
+            lista.forEach(item => {
+                datos.push([item.nombre, item.url]);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(datos);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Links");
+
+            XLSX.writeFile(wb, "links_imagenes.xlsx");
+        }
+    </script>
+</body>
+</html>
