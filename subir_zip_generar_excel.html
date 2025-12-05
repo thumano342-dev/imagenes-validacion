@@ -21,16 +21,25 @@
         const REPO_NAME = "imagenes-validacion";
         const BRANCH = "main";
 
-        // 🔥 PEGA AQUÍ TU TOKEN NUEVO
+        // 🔥 Token seguro
         const GITHUB_TOKEN = prompt("Introduce tu token de GitHub:");
-
 
         const extensionesValidas = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
 
+        // 🔹 Conversión segura ArrayBuffer → Base64
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 0x8000; // 32 KB
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.subarray(i, i + chunkSize);
+                binary += String.fromCharCode.apply(null, chunk);
+            }
+            return btoa(binary);
+        }
+
         async function subirAGithub(path, archivoBase64) {
             const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${path}`;
-
-            
             const contenido = {
                 message: "Subida automática",
                 content: archivoBase64
@@ -66,10 +75,10 @@
             const contenidoZip = await zip.loadAsync(file);
 
             const rutasExcel = [];
-            let totalArchivos = Object.keys(contenidoZip.files).length;
+            const archivos = Object.keys(contenidoZip.files);
             let procesados = 0;
 
-            for (const nombre in contenidoZip.files) {
+            for (const nombre of archivos) {
                 const archivo = contenidoZip.files[nombre];
 
                 if (archivo.dir) {
@@ -79,35 +88,39 @@
 
                 const ext = nombre.split(".").pop().toLowerCase();
 
-                // Evitar archivos de OneDrive
+                // Evitar archivos de OneDrive / MacOS
                 if (nombre.startsWith("._") || nombre.includes("__MACOSX")) {
                     procesados++;
                     continue;
                 }
 
-                // Solo permitir imágenes
                 if (!extensionesValidas.includes(ext)) {
                     procesados++;
                     continue;
                 }
 
-                // Mostrar progreso
-                document.getElementById("status").innerText = `Procesando (${procesados}/${totalArchivos}): ${nombre}`;
+                document.getElementById("status").innerText = `Procesando (${procesados}/${archivos.length}): ${nombre}`;
 
                 const arrayBuffer = await archivo.async("arraybuffer");
-                const bytes = new Uint8Array(arrayBuffer);
-                const base64 = btoa(String.fromCharCode(...bytes));
+                const base64 = arrayBufferToBase64(arrayBuffer);
 
-                // Sanitizar nombre
                 const cleanName = nombre.replace(/.*\//, "").replace(/[^\w.-]/g, "_");
-                const rutaGitHub = "imagenes/" + cleanName;
+                const rutaGitHub = "evidencias/" + cleanName;
 
-                await subirAGithub(rutaGitHub, base64);
+                try {
+                    await subirAGithub(rutaGitHub, base64);
+                } catch (err) {
+                    console.error(`Error subiendo ${cleanName}:`, err);
+                    continue;
+                }
 
                 const rawLink = `https://raw.githubusercontent.com/${GITHUB_USERNAME}/${REPO_NAME}/${BRANCH}/${rutaGitHub}`;
                 rutasExcel.push({ nombre: cleanName, url: rawLink });
 
                 procesados++;
+
+                // Pequeño delay para no saturar la API
+                await new Promise(r => setTimeout(r, 50));
             }
 
             generarExcel(rutasExcel);
