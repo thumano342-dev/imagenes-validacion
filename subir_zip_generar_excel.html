@@ -1,415 +1,178 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Validador de Imágenes — Subir ZIP → GitHub → Excel</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Validación de Imágenes</title>
 
-  <!-- Librerías -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+    <!-- Librerías necesarias -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://unpkg.com/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-  <style>
-    body { font-family: Inter, Arial, sans-serif; padding: 18px; background:#f5f7fb; color:#222 }
-    header { display:flex; align-items:center; gap:16px; margin-bottom:14px }
-    h1 { margin:0; font-size:20px }
-    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
-    .btn { padding:8px 12px; border-radius:8px; border:0; cursor:pointer }
-    .btn-primary { background:#2563eb; color:white }
-    .btn-light { background:white; box-shadow:0 1px 4px rgba(0,0,0,.06) }
-    .status { margin-top:8px; color:#444 }
-    #galeria { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:18px }
-    .card { background:white; border-radius:10px; padding:8px; box-shadow:0 6px 18px rgba(20,30,60,.06); display:flex; flex-direction:column; gap:8px }
-    .thumb { width:100%; height:180px; object-fit:cover; border-radius:8px; background:#eee; }
-    .meta { font-size:13px; color:#333; display:flex; justify-content:space-between; gap:8px; align-items:center }
-    .badges { display:flex; gap:6px; flex-wrap:wrap }
-    .badge { padding:4px 8px; font-size:12px; border-radius:999px }
-    .badge.approved { background:#16a34a; color:white }
-    .badge.rejected { background:#ef4444; color:white }
-    .badge.auto { background:#f59e0b; color:white }
-    .btn-approve { background:#16a34a; color:white; border-radius:8px; padding:6px 8px; border:0; cursor:pointer }
-    .btn-reject { background:#ef4444; color:white; border-radius:8px; padding:6px 8px; border:0; cursor:pointer }
-    .row { display:flex; gap:8px; align-items:center }
-    .small { font-size:12px; color:#555 }
-    .filters { margin-left:8px }
-    footer { margin-top:18px; color:#666; font-size:13px }
-    input[type=file] { padding:6px }
-  </style>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #5a62d8, #7442c8);
+            margin: 0;
+            padding: 0;
+            color: #fff;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1000px;
+            background: #ffffff;
+            color: #333;
+            margin: 40px auto;
+            padding: 35px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #6f79ff, #844bdb);
+            padding: 30px;
+            border-radius: 15px 15px 0 0;
+        }
+
+        .zone {
+            border: 3px dashed #7d8cff;
+            padding: 40px;
+            text-align: center;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #6f79ff, #844bdb);
+            border: none;
+            padding: 15px 35px;
+            font-size: 18px;
+            border-radius: 50px;
+            color: #fff;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.2s;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+    </style>
 </head>
+
 <body>
 
-<header>
-  <div>
-    <h1>Validador de Imágenes</h1>
-    <div class="small">Sube un ZIP, revisa la galería, clasifica, extrae datos y genera Excel con links permanentes a GitHub.</div>
-  </div>
-  <div style="margin-left:auto" class="controls">
-    <label class="small">Repo GitHub:</label>
-    <input id="githubUser" placeholder="usuario (ej: thumano342-dev)" />
-    <input id="repoName" placeholder="repo (ej: imagenes-validacion)" />
-    <input id="branch" placeholder="branch (main)" value="main" style="width:120px" />
-  </div>
-</header>
+    <div class="header">
+        <h1>📸 Sistema de Validación de Imágenes</h1>
+        <p style="text-align:center; font-size:15px;">Versión rápida - Clasifica y extrae datos automáticamente</p>
+    </div>
 
-<section class="controls">
-  <input type="file" id="zipInput" accept=".zip" />
-  <button class="btn btn-primary" id="btnProcesar">Procesar ZIP → Subir y Mostrar</button>
-  <button class="btn btn-light" id="btnGenerarExcel">Generar Excel</button>
+    <div class="container">
+        <div class="zone" id="drop-zone">
+            <p>Arrastra tu archivo ZIP aquí o haz clic para seleccionar</p>
+            <input type="file" id="zipInput" accept=".zip" style="display:none;">
+            <button class="btn" onclick="document.getElementById('zipInput').click()">📂 Seleccionar archivo ZIP</button>
+        </div>
 
-  <div class="filters">
-    <label>Filtrar:</label>
-    <select id="filtro">
-      <option value="all">Todas</option>
-      <option value="approved">Aprobadas</option>
-      <option value="rejected">Rechazadas</option>
-      <option value="auto">Auto-detectadas</option>
-    </select>
-  </div>
-</section>
+        <div style="text-align:center;">
+            <button class="btn" onclick="procesarZIP()">🚀 Procesar Imágenes</button>
+        </div>
+    </div>
 
-<p id="status" class="status"></p>
-
-<main id="galeria"></main>
-
-<footer>
-  <div>Heurísticas automáticas: detección de rostro (si disponible), enfoque (varianza Laplaciana), brillo/contraste. Siempre puedes corregir manualmente y volver a generar Excel.</div>
-</footer>
 
 <script>
-  // Config inicial
-  const extensionesValidas = ["jpg","jpeg","png","gif","bmp","webp"];
-  let GITHUB_TOKEN = null;
-  const images = []; // {name, blob, url, gitUrl, estado: 'unknown'|'approved'|'rejected'|'auto', parsed:{date,mie,store,mico}, autoReason}
+let archivoZIP = null;
 
-  // Utilidad: ArrayBuffer -> base64
-  function arrayBufferToBase64(buffer){
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const chunk = 0x8000;
-    for (let i=0; i<bytes.length; i+=chunk){
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunk));
-    }
-    return btoa(binary);
-  }
+document.getElementById("zipInput").addEventListener("change", function(e) {
+    archivoZIP = e.target.files[0];
+});
 
-  // Subir archivo a GitHub (PUT contents)
-  async function subirAGithub(path, archivoBase64, user, repo, branch) {
-    if (!GITHUB_TOKEN) {
-      GITHUB_TOKEN = prompt("Introduce tu token de GitHub (scope repo):");
-      if(!GITHUB_TOKEN) throw new Error("Token requerido");
-    }
-    const url = `https://api.github.com/repos/${user}/${repo}/contents/${path}`;
-    const body = { message: "Subida automática desde validador", content: archivoBase64, branch };
-    const res = await fetch(url, {
-      method: "PUT",
-      headers: { "Authorization": `Bearer ${GITHUB_TOKEN}`, "Content-Type":"application/json" },
-      body: JSON.stringify(body)
+
+// ⭐ EXTRACTOR OCR COMPLETO
+async function extraerDatosOCR(imageBlob) {
+    const { data: { text } } = await Tesseract.recognize(imageBlob, 'spa', {
+        logger: m => console.log(m)
     });
-    if (!res.ok) {
-      const t = await res.text();
-      console.error("GitHub error:", t);
-      throw new Error("Error subiendo a GitHub: " + res.status);
-    }
-    return res.json();
-  }
 
-  // Heurística: varianza Laplaciana => enfoque
-  function varianceOfLaplacian(imageData) {
-    // Laplacian kernel 3x3
-    const w = imageData.width, h = imageData.height;
-    const data = imageData.data;
-    // convert to grayscale
-    const g = new Float32Array(w*h);
-    for (let i=0, p=0; i<data.length; i+=4, p++){
-      g[p] = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
-    }
-    let sum=0, sumsq=0, n=0;
-    const k = [-1,-1,-1,-1,8,-1,-1,-1,-1]; // Laplacian
-    for (let y=1; y<h-1; y++){
-      for (let x=1; x<w-1; x++){
-        let idx = 0;
-        let val = 0;
-        for (let ky=-1; ky<=1; ky++){
-          for (let kx=-1; kx<=1; kx++){
-            val += g[(y+ky)*w + (x+kx)] * k[idx++];
-          }
+    console.log("Texto detectado:", text);
+
+    const fechaRegex = /(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}\s*(AM|PM))/i;
+    const mieRegex = /(MIE\d+)/i;
+    const micoRegex = /(MICO\w+)/i;
+
+    let tienda = "";
+    const lineas = text.split("\n").map(l => l.trim());
+
+    for (let linea of lineas) {
+        if (!linea.match(mieRegex) && !linea.match(micoRegex) && !linea.match(fechaRegex) && linea.length > 2) {
+            tienda = linea;
         }
-        sum += val; sumsq += val*val; n++;
-      }
     }
-    if (n===0) return 0;
-    const mean = sum/n;
-    return (sumsq / n) - mean*mean;
-  }
 
-  // Extrae región inferior derecha (ej: ultimo 28% ancho x 24% alto) para OCR
-  function cropBottomRight(img, wperc=0.5, hperc=0.28) {
-    const canvas = document.createElement("canvas");
-    const w = img.naturalWidth, h = img.naturalHeight;
-    const cw = Math.max(200, Math.floor(w * wperc)); // mínimo ancho para OCR
-    const ch = Math.max(80, Math.floor(h * hperc));
-    canvas.width = cw; canvas.height = ch;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, w - cw, h - ch, cw, ch, 0, 0, cw, ch);
-    return canvas;
-  }
+    return {
+        fecha: text.match(fechaRegex)?.[1] || "",
+        mie: text.match(mieRegex)?.[1] || "",
+        tienda: tienda,
+        mico: text.match(micoRegex)?.[1] || ""
+    };
+}
 
-  // OCR con tesseract (texto en la región)
-  async function ocrImageCanvas(canvas) {
-    try {
-      const worker = Tesseract.createWorker({ logger: m => {} });
-      await worker.load();
-      await worker.loadLanguage('eng+spa');
-      await worker.initialize('eng+spa');
-      await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK });
-      const { data: { text } } = await worker.recognize(canvas);
-      await worker.terminate();
-      return text;
-    } catch (e) {
-      console.error("OCR error", e);
-      return "";
+
+
+// ⭐ PROCESAR ZIP
+async function procesarZIP() {
+    if (!archivoZIP) {
+        alert("Selecciona un archivo ZIP primero.");
+        return;
     }
-  }
 
-  // Parseo de texto extraído
-  function parseFooterText(text) {
-    // Limpia y separa líneas
-    const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    const result = { date: "", mie: "", store: "", mico: "" };
-    for (const line of lines) {
-      const l = line.replace(/\s{2,}/g,' ').trim();
-      // Fecha: contiene 'Attendance' o formato mm/dd/yyyy o dd/mm/yyyy
-      if (/attendance/i.test(l) || /\d{1,2}\/\d{1,2}\/\d{4}/.test(l) || /\d{4}-\d{1,2}-\d{1,2}/.test(l)) {
-        result.date = l;
-        continue;
-      }
-      // MIE: empieza por MIE y números
-      if (/MIE\d{6,}/i.test(l)) {
-        result.mie = l.match(/MIE\S*/i)[0];
-        continue;
-      }
-      // MICO: empieza por MICO o MICOD
-      if (/MICO/i.test(l) || /MICOD/i.test(l)) {
-        const match = l.match(/MICO\S*|MICOD\S*/i);
-        if (match) result.mico = match[0];
-        continue;
-      }
-      // Tienda: si contiene letras y espacio (ej. CAV RIOHACHA) y no es MIE/MICO
-      if (!/MIE|MICO|MICOD/i.test(l) && /[A-Za-z]{2,}/.test(l)) {
-        // si no hay store, lo asignamos
-        if (!result.store) result.store = l;
-      }
+    const zip = await JSZip.loadAsync(archivoZIP);
+    const excelData = [];
+
+    for (const nombreArchivo of Object.keys(zip.files)) {
+        if (!nombreArchivo.toLowerCase().match(/\.(jpg|jpeg|png)$/)) continue;
+
+        const fileData = await zip.files[nombreArchivo].async("blob");
+
+        // Ejecutar OCR
+        const datos = await extraerDatosOCR(fileData);
+
+        // Clasificar automáticamente (solo ejemplo)
+        const estado = datos.mie ? "approved" : "rejected";
+
+        excelData.push({
+            imagen: nombreArchivo,
+            estado: estado,
+            fecha: datos.fecha,
+            mie: datos.mie,
+            tienda: datos.tienda,
+            mico: datos.mico
+        });
     }
-    return result;
-  }
 
-  // Detección de rostro con FaceDetector (si disponible)
-  async function detectFaceWithAPI(img) {
-    if (!('FaceDetector' in window)) return { faces: 0 };
-    try {
-      const fd = new FaceDetector({ fastMode: true, maxDetectedFaces: 2 });
-      const faces = await fd.detect(img);
-      return { faces: faces.length, facesRects: faces.map(f => f.boundingBox) };
-    } catch (e) {
-      console.warn('FaceDetector error', e);
-      return { faces: 0 };
-    }
-  }
+    generarExcel(excelData);
+}
 
-  // Render galería
-  function renderGaleria() {
-    const gal = document.getElementById("galeria");
-    gal.innerHTML = "";
-    const filtro = document.getElementById("filtro").value;
-    images.forEach((it, idx) => {
-      if (filtro==='approved' && it.estado!=='approved') return;
-      if (filtro==='rejected' && it.estado!=='rejected') return;
-      if (filtro==='auto' && it.estado!=='auto') return;
 
-      const card = document.createElement("div"); card.className = "card";
-      const img = document.createElement("img"); img.className = "thumb"; img.src = it.url; img.alt = it.name;
 
-      // meta
-      const meta = document.createElement("div"); meta.className = "meta";
-      const left = document.createElement("div"); left.style.flex = "1";
-      left.innerHTML = `<div style="font-weight:600">${it.name}</div>
-                        <div class="small">${it.parsed.date || ''}</div>`;
-      const right = document.createElement("div"); right.style.textAlign = "right";
-      const badges = document.createElement("div"); badges.className = "badges";
-      if (it.estado === 'approved') badges.innerHTML = `<span class="badge approved">APROBADO</span>`;
-      else if (it.estado === 'rejected') badges.innerHTML = `<span class="badge rejected">RECHAZADO</span>`;
-      else if (it.estado === 'auto') badges.innerHTML = `<span class="badge auto">AUTO</span>`;
-
-      right.appendChild(badges);
-      meta.appendChild(left); meta.appendChild(right);
-
-      // parsed details
-      const details = document.createElement("div"); details.className = "small";
-      details.innerHTML = `<strong>MIE:</strong> ${it.parsed.mie || '-'} &nbsp; <strong>MICO:</strong> ${it.parsed.mico || '-'} <br> <strong>Tienda:</strong> ${it.parsed.store || '-'} `;
-
-      // actions
-      const actions = document.createElement("div"); actions.className = "row";
-      const apro = document.createElement("button"); apro.className = "btn-approve"; apro.innerText = "Aprobar";
-      const rej = document.createElement("button"); rej.className = "btn-reject"; rej.innerText = "Rechazar";
-      const autoHint = document.createElement("div"); autoHint.className = "small"; autoHint.style.marginLeft="6px";
-      autoHint.innerText = it.autoReason ? "Auto: "+it.autoReason : "";
-
-      apro.onclick = () => { it.estado = 'approved'; renderGaleria(); };
-      rej.onclick = () => { it.estado = 'rejected'; renderGaleria(); };
-
-      // open preview
-      img.onclick = () => {
-        const w = window.open("");
-        const html = `<img src="${it.url}" style="max-width:100%;display:block;margin:12px auto"/><pre style="white-space:pre-wrap;font-family:monospace">${JSON.stringify(it,null,2)}</pre>`;
-        w.document.write(html);
-      };
-
-      actions.appendChild(apro); actions.appendChild(rej); actions.appendChild(autoHint);
-
-      // url + download
-      const linkDiv = document.createElement("div"); linkDiv.className = "small";
-      linkDiv.innerHTML = `URL: <a href="${it.gitUrl || it.url}" target="_blank" rel="noopener">${it.gitUrl ? 'GitHub' : 'Raw'}</a>`;
-
-      card.appendChild(img);
-      card.appendChild(meta);
-      card.appendChild(details);
-      card.appendChild(actions);
-      card.appendChild(linkDiv);
-
-      gal.appendChild(card);
-    });
-  }
-
-  // Generar Excel con columnas: Nombre, URL, Estado, Fecha, MIE, Tienda, MICO
-  function generarExcelFile() {
-    const datos = [["Archivo","URL","Estado","Fecha","MIE","Tienda","MICO"]];
-    images.forEach(it => {
-      datos.push([it.name, it.gitUrl || it.url, it.estado || 'unknown', it.parsed.date || '', it.parsed.mie || '', it.parsed.store || '', it.parsed.mico || '']);
-    });
-    const ws = XLSX.utils.aoa_to_sheet(datos);
+// ⭐ GENERAR EXCEL FINAL
+function generarExcel(data) {
+    const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Links");
-    XLSX.writeFile(wb, "links_imagenes_validacion.xlsx");
-  }
 
-  // Procesar ZIP
-  document.getElementById("btnProcesar").onclick = async () => {
-    const file = document.getElementById("zipInput").files[0];
-    const usuario = (document.getElementById("githubUser").value || "").trim();
-    const repo = (document.getElementById("repoName").value || "").trim();
-    const branch = (document.getElementById("branch").value || "main").trim();
-    if (!file) { alert("Selecciona el archivo ZIP primero."); return; }
-    if (!usuario || !repo) { alert("Indica usuario y repo de GitHub."); return; }
+    XLSX.utils.book_append_sheet(wb, ws, "Resultados");
 
-    document.getElementById("status").innerText = "Extrayendo ZIP...";
-    images.length = 0;
-
-    const zip = new JSZip();
-    const contenido = await zip.loadAsync(file);
-    const archivos = Object.keys(contenido.files).filter(n => !contenido.files[n].dir);
-
-    let i = 0;
-    for (const nombre of archivos) {
-      i++;
-      const ext = nombre.split(".").pop().toLowerCase();
-      if (!extensionesValidas.includes(ext)) continue;
-      document.getElementById("status").innerText = `Procesando ${i}/${archivos.length}: ${nombre}`;
-
-      const archivo = contenido.files[nombre];
-      const arrayBuffer = await archivo.async("arraybuffer");
-      const blob = new Blob([arrayBuffer], { type: "image/"+ext });
-      const objectUrl = URL.createObjectURL(blob);
-
-      // Crear img para análisis
-      const img = new Image();
-      img.src = objectUrl;
-      await new Promise(r => { img.onload = r; img.onerror = r; });
-
-      // OCR en region inferior derecha
-      const crop = cropBottomRight(img, 0.5, 0.28);
-      const ocrText = await ocrImageCanvas(crop).catch(e=>{console.warn('ocr fail', e); return "";});
-      const parsed = parseFooterText(ocrText);
-
-      // evaluar enfoque + brillo
-      const cvCanvas = document.createElement("canvas"); cvCanvas.width = Math.min(600, img.naturalWidth); cvCanvas.height = Math.min(400, img.naturalHeight);
-      const ctx = cvCanvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, cvCanvas.width, cvCanvas.height);
-      const imageData = ctx.getImageData(0,0,cvCanvas.width,cvCanvas.height);
-      const varLap = varianceOfLaplacian(imageData);
-      // brillo medio
-      let sum=0; for (let p=0; p<imageData.data.length; p+=4){ sum += (0.299*imageData.data[p] + 0.587*imageData.data[p+1] + 0.114*imageData.data[p+2]); }
-      const avgBright = sum / (imageData.data.length/4);
-
-      // face detection (si existe)
-      const faceInfo = await detectFaceWithAPI(img);
-      let estado = 'unknown', autoReason = '';
-      // Umbrales heurísticos
-      const BLUR_THRESHOLD = 18; // si varLap muy baja -> borrosa
-      const DARK_THRESHOLD = 40; // brillo muy baja
-      if (faceInfo.faces >= 1 && varLap > BLUR_THRESHOLD && avgBright > DARK_THRESHOLD) {
-        estado = 'auto'; autoReason = 'rostro detectado + nítida';
-      } else {
-        // Si borrosa o sin rostro -> rechazada automática
-        if (varLap <= BLUR_THRESHOLD || avgBright <= DARK_THRESHOLD) {
-          estado = 'rejected'; autoReason = 'borrosa/oscura (auto)';
-        } else if (faceInfo.faces >= 1) {
-          estado = 'auto'; autoReason = 'rostro detectado (auto)';
-        } else {
-          estado = 'rejected'; autoReason = 'sin rostro detectado (auto)';
-        }
-      }
-
-      // Subir a GitHub (ruta evidencias/)
-      const cleanName = nombre.replace(/^.*[\\/]/, "").replace(/[^\w.\-]/g, "_");
-      const rutaGitHub = `evidencias/${cleanName}`;
-      const base64 = arrayBufferToBase64(arrayBuffer);
-      let gitUrl = null;
-      try {
-        const res = await subirAGithub(rutaGitHub, base64, usuario, repo, branch);
-        gitUrl = `https://raw.githubusercontent.com/${usuario}/${repo}/${branch}/${rutaGitHub}`;
-      } catch (e) {
-        console.warn("No se pudo subir a GitHub:", e);
-        // continuar pero con url local
-      }
-
-      images.push({
-        name: cleanName,
-        blob,
-        url: objectUrl,
-        gitUrl,
-        estado: estado === 'auto' ? 'auto' : estado,
-        parsed,
-        autoReason
-      });
-
-      // pequeño delay
-      await new Promise(r => setTimeout(r, 60));
-      renderGaleria();
-    }
-
-    document.getElementById("status").innerText = `✔ Proceso completado. ${images.length} imágenes procesadas. Revisa la galería.`;
-  };
-
-  // Generar Excel
-  document.getElementById("btnGenerarExcel").onclick = () => {
-    if (images.length === 0) { alert("No hay imágenes procesadas."); return; }
-    // si hay items 'auto' los marcamos visualmente pero dejamos estado a 'approved' o 'rejected' según preferencia:
-    // Por ahora: mantener 'approved' si auto y razón contiene 'rostro', else 'rejected' si razón contiene 'borrosa'
-    images.forEach(it => {
-      if (it.estado === 'auto') {
-        if (/rostro/i.test(it.autoReason)) it.estado = 'approved';
-        else if (/borrosa|oscura|sin rostro/i.test(it.autoReason)) it.estado = 'rejected';
-        else it.estado = 'approved';
-      }
-    });
-    generarExcelFile();
-    renderGaleria();
-  };
-
-  document.getElementById("filtro").onchange = renderGaleria;
-
+    XLSX.writeFile(wb, "resultado_validacion.xlsx");
+}
 </script>
+
 </body>
 </html>
-
