@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Validación de Imágenes</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -364,12 +364,14 @@
         </div>
         
         <div class="upload-section">
-            <div class="upload-box">
+            <div class="upload-box" id="uploadBox">
+                <input type="file" id="zipInput" accept=".zip" style="display: none;" />
                 <label for="zipInput" class="upload-label">
                     📁 Seleccionar archivo ZIP
                 </label>
-                <input type="file" id="zipInput" accept=".zip" />
-                <p style="margin-top: 15px; color: #666;">Arrastra tu archivo ZIP aquí o haz clic para seleccionar</p>
+                <p style="margin-top: 15px; color: #666;">
+                    <span id="fileName">Arrastra tu archivo ZIP aquí o haz clic para seleccionar</span>
+                </p>
             </div>
             
             <div style="text-align: center; margin-top: 20px;">
@@ -535,13 +537,32 @@
 
         async function extraerDatos(dataUrl) {
             try {
-                const result = await Tesseract.recognize(dataUrl, 'spa', {
-                    logger: m => console.log(m)
+                // Crear imagen para analizar solo la esquina inferior derecha
+                const img = new Image();
+                await new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.src = dataUrl;
+                });
+                
+                // Recortar solo la esquina inferior derecha (donde están los datos)
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const ancho = Math.min(img.width * 0.5, 400);
+                const alto = Math.min(img.height * 0.3, 200);
+                canvas.width = ancho;
+                canvas.height = alto;
+                ctx.drawImage(img, img.width - ancho, img.height - alto, ancho, alto, 0, 0, ancho, alto);
+                
+                const imagenRecortada = canvas.toDataURL();
+                
+                const result = await Tesseract.recognize(imagenRecortada, 'spa', {
+                    logger: () => {} // Sin logs para mayor velocidad
                 });
                 
                 const texto = result.data.text;
+                console.log("Texto OCR:", texto);
                 
-                // Extraer fecha (formatos: DD-MM-YYYY, YYYY-MM-DD, etc)
+                // Extraer fecha
                 const fechaMatch = texto.match(/\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4}|\d{2}\/\d{2}\/\d{4}/);
                 const fecha = fechaMatch ? fechaMatch[0] : "No detectado";
                 
@@ -549,12 +570,12 @@
                 const diasMatch = texto.match(/LUN|MAR|MIE|JUE|VIE|SAB|DOM/i);
                 const dia = diasMatch ? diasMatch[0].toUpperCase() : "No detectado";
                 
-                // Extraer CAV (texto seguido de números)
-                const cavMatch = texto.match(/CAV\s*[A-Z\s]+/i) || texto.match(/[A-Z]{2,}\s+[A-Z\s]+/);
+                // Extraer CAV o nombre de tienda
+                const cavMatch = texto.match(/CAV[^0-9\n]*/i);
                 const tienda = cavMatch ? cavMatch[0].trim() : "No detectado";
                 
-                // Extraer MICO/código numérico
-                const codigoMatch = texto.match(/MICO[D]?\d+/i) || texto.match(/\d{6,}/);
+                // Extraer MICO + número
+                const codigoMatch = texto.match(/MICO[D]?\d+/i);
                 const codigo = codigoMatch ? codigoMatch[0] : "No detectado";
                 
                 return { fecha, dia, tienda, codigo };
@@ -674,6 +695,18 @@
 
         // Mejorar la carga de archivos con drag & drop
         const uploadBox = document.querySelector('.upload-box');
+        const zipInput = document.getElementById('zipInput');
+        const fileName = document.getElementById('fileName');
+        
+        // Mostrar nombre del archivo cuando se selecciona
+        zipInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                fileName.textContent = `📦 Archivo seleccionado: ${e.target.files[0].name}`;
+                fileName.style.color = '#28a745';
+                fileName.style.fontWeight = 'bold';
+            }
+        });
+        
         uploadBox.addEventListener('dragover', (e) => {
             e.preventDefault();
             uploadBox.style.borderColor = '#764ba2';
@@ -690,8 +723,11 @@
             uploadBox.style.borderColor = '#667eea';
             uploadBox.style.background = 'white';
             const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                document.getElementById('zipInput').files = files;
+            if (files.length > 0 && files[0].name.endsWith('.zip')) {
+                zipInput.files = files;
+                fileName.textContent = `📦 Archivo seleccionado: ${files[0].name}`;
+                fileName.style.color = '#28a745';
+                fileName.style.fontWeight = 'bold';
             }
         });
     </script>
