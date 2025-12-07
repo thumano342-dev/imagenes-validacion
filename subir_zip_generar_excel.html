@@ -1,12 +1,11 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Validación de Imágenes</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -55,6 +54,7 @@
             text-align: center;
             background: white;
             transition: all 0.3s;
+            cursor: pointer;
         }
         
         .upload-box:hover {
@@ -62,8 +62,19 @@
             background: #f8f9ff;
         }
         
-        .upload-box input[type="file"] {
-            display: none;
+        .upload-box.dragover {
+            border-color: #28a745;
+            background: #e8f5e9;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            left: -9999px;
         }
         
         .upload-label {
@@ -80,6 +91,17 @@
         
         .upload-label:hover {
             transform: scale(1.05);
+        }
+        
+        .file-name {
+            margin-top: 15px;
+            color: #666;
+            font-size: 1em;
+        }
+        
+        .file-name.selected {
+            color: #28a745;
+            font-weight: bold;
         }
         
         .btn {
@@ -103,9 +125,14 @@
             color: white;
         }
         
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         
         .status {
@@ -177,7 +204,7 @@
         .gallery {
             padding: 30px;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 20px;
         }
         
@@ -244,23 +271,24 @@
             font-weight: bold;
             margin-bottom: 10px;
             color: #333;
+            word-break: break-word;
+            font-size: 0.9em;
         }
         
-        .extracted-data {
+        .data-inputs {
             background: #f8f9fa;
             padding: 10px;
             border-radius: 8px;
-            font-size: 0.85em;
             margin-bottom: 10px;
         }
         
-        .extracted-data div {
+        .data-inputs input {
+            width: 100%;
+            padding: 6px;
             margin: 3px 0;
-        }
-        
-        .data-label {
-            font-weight: bold;
-            color: #667eea;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.85em;
         }
         
         .action-buttons {
@@ -353,6 +381,20 @@
             justify-content: center;
             color: white;
             font-weight: bold;
+            font-size: 0.9em;
+        }
+        
+        .bulk-actions {
+            padding: 15px 30px;
+            background: #fff3cd;
+            border-bottom: 2px solid #ffc107;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .bulk-actions strong {
+            color: #856404;
         }
     </style>
 </head>
@@ -360,28 +402,36 @@
     <div class="container">
         <div class="header">
             <h1>📸 Sistema de Validación de Imágenes</h1>
-            <p>Sube tu ZIP, clasifica imágenes y descarga el Excel con toda la información</p>
+            <p>Versión rápida - Clasifica y agrega datos manualmente</p>
         </div>
         
         <div class="upload-section">
             <div class="upload-box" id="uploadBox">
-                <input type="file" id="zipInput" accept=".zip" style="display: none;" />
-                <label for="zipInput" class="upload-label">
-                    📁 Seleccionar archivo ZIP
-                </label>
-                <p style="margin-top: 15px; color: #666;">
-                    <span id="fileName">Arrastra tu archivo ZIP aquí o haz clic para seleccionar</span>
-                </p>
+                <div class="file-input-wrapper">
+                    <input type="file" id="zipInput" accept=".zip">
+                    <label for="zipInput" class="upload-label">📁 Seleccionar archivo ZIP</label>
+                </div>
+                <p class="file-name" id="fileName">Arrastra tu archivo ZIP aquí o haz clic para seleccionar</p>
             </div>
             
             <div style="text-align: center; margin-top: 20px;">
-                <button class="btn btn-primary" onclick="procesarZip()">🚀 Procesar Imágenes</button>
+                <button class="btn btn-primary" id="btnProcesar" onclick="procesarZip()">🚀 Procesar Imágenes</button>
                 <button class="btn btn-success" onclick="generarExcel()" style="display:none;" id="btnExcel">
                     📊 Descargar Excel
                 </button>
             </div>
             
             <div id="status"></div>
+        </div>
+        
+        <div class="bulk-actions" style="display:none;" id="bulkActions">
+            <strong>Acciones masivas:</strong>
+            <button class="btn btn-primary" onclick="aprobarTodas()" style="padding: 8px 20px; font-size: 0.9em;">
+                ✅ Aprobar Todas
+            </button>
+            <button class="btn" onclick="rechazarTodas()" style="padding: 8px 20px; font-size: 0.9em; background: #dc3545; color: white;">
+                ❌ Rechazar Todas
+            </button>
         </div>
         
         <div class="filters" style="display:none;" id="filters">
@@ -405,89 +455,122 @@
     <div class="processing-overlay" id="overlay">
         <div class="processing-content">
             <div class="spinner"></div>
-            <h2 id="overlayTitle">Procesando imágenes...</h2>
+            <h2 id="overlayTitle">Extrayendo imágenes...</h2>
             <div class="progress-bar">
                 <div class="progress-fill" id="progressBar">0%</div>
             </div>
-            <p id="overlayText">Esto puede tomar varios minutos</p>
+            <p id="overlayText">Procesando archivos del ZIP</p>
         </div>
     </div>
 
     <script>
-        const GITHUB_USERNAME = "thumano342-dev";
-        const REPO_NAME = "imagenes-validacion";
-        const BRANCH = "main";
-        let GITHUB_TOKEN = "";
-        
         let imagenes = [];
         let filtroActual = 'all';
+        
+        const zipInput = document.getElementById('zipInput');
+        const uploadBox = document.getElementById('uploadBox');
+        const fileName = document.getElementById('fileName');
+        
+        // Evento cuando se selecciona archivo
+        zipInput.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                fileName.textContent = `📦 Archivo seleccionado: ${file.name}`;
+                fileName.classList.add('selected');
+            }
+        });
+        
+        // Drag and drop
+        uploadBox.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadBox.classList.add('dragover');
+        });
+        
+        uploadBox.addEventListener('dragleave', () => {
+            uploadBox.classList.remove('dragover');
+        });
+        
+        uploadBox.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadBox.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].name.endsWith('.zip')) {
+                zipInput.files = files;
+                fileName.textContent = `📦 Archivo seleccionado: ${files[0].name}`;
+                fileName.classList.add('selected');
+            }
+        });
 
         async function procesarZip() {
-            const file = document.getElementById("zipInput").files[0];
+            const file = zipInput.files[0];
             if (!file) {
-                alert("Selecciona un archivo ZIP primero.");
+                alert("Por favor selecciona un archivo ZIP primero.");
                 return;
-            }
-            
-            if (!GITHUB_TOKEN) {
-                GITHUB_TOKEN = prompt("Introduce tu token de GitHub:");
-                if (!GITHUB_TOKEN) return;
             }
 
             mostrarOverlay(true, "Extrayendo imágenes del ZIP...");
 
-            const zip = new JSZip();
-            const contenidoZip = await zip.loadAsync(file);
-            
-            imagenes = [];
-            const extensionesValidas = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
-            
-            const archivosImagen = Object.keys(contenidoZip.files).filter(nombre => {
-                const archivo = contenidoZip.files[nombre];
-                if (archivo.dir) return false;
-                if (nombre.startsWith("._") || nombre.includes("__MACOSX")) return false;
-                const ext = nombre.split(".").pop().toLowerCase();
-                return extensionesValidas.includes(ext);
-            });
-
-            for (let i = 0; i < archivosImagen.length; i++) {
-                const nombre = archivosImagen[i];
-                const archivo = contenidoZip.files[nombre];
+            try {
+                const zip = new JSZip();
+                const contenidoZip = await zip.loadAsync(file);
                 
-                actualizarProgreso((i / archivosImagen.length) * 100, 
-                    `Procesando imagen ${i + 1} de ${archivosImagen.length}`);
-
-                const arrayBuffer = await archivo.async("arraybuffer");
-                const bytes = new Uint8Array(arrayBuffer);
-                const base64 = btoa(String.fromCharCode(...bytes));
+                imagenes = [];
+                const extensionesValidas = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
                 
-                const cleanName = nombre.replace(/.*\//, "").replace(/[^\w.-]/g, "_");
-                const dataUrl = `data:image/jpeg;base64,${base64}`;
-                
-                // Clasificar imagen
-                const clasificacion = await clasificarImagen(dataUrl);
-                
-                // Extraer datos OCR
-                const datosExtraidos = await extraerDatos(dataUrl);
-
-                imagenes.push({
-                    nombre: cleanName,
-                    base64: base64,
-                    dataUrl: dataUrl,
-                    clasificacion: clasificacion,
-                    datos: datosExtraidos,
-                    url: null
+                const archivosImagen = Object.keys(contenidoZip.files).filter(nombre => {
+                    const archivo = contenidoZip.files[nombre];
+                    if (archivo.dir) return false;
+                    if (nombre.startsWith("._") || nombre.includes("__MACOSX")) return false;
+                    const ext = nombre.split(".").pop().toLowerCase();
+                    return extensionesValidas.includes(ext);
                 });
-            }
 
-            mostrarOverlay(false);
-            mostrarGaleria();
-            document.getElementById('btnExcel').style.display = 'inline-block';
-            document.getElementById('filters').style.display = 'flex';
-            actualizarEstadisticas();
+                for (let i = 0; i < archivosImagen.length; i++) {
+                    const nombre = archivosImagen[i];
+                    const archivo = contenidoZip.files[nombre];
+                    
+                    actualizarProgreso((i / archivosImagen.length) * 100, 
+                        `Procesando ${i + 1} de ${archivosImagen.length}`);
+
+                    const arrayBuffer = await archivo.async("arraybuffer");
+                    const bytes = new Uint8Array(arrayBuffer);
+                    const base64 = btoa(String.fromCharCode(...bytes));
+                    
+                    const cleanName = nombre.replace(/.*\//, "");
+                    const dataUrl = `data:image/jpeg;base64,${base64}`;
+                    
+                    // Clasificación automática simple
+                    const clasificacion = await clasificarImagenRapido(dataUrl);
+
+                    imagenes.push({
+                        nombre: cleanName,
+                        base64: base64,
+                        dataUrl: dataUrl,
+                        clasificacion: clasificacion,
+                        fecha: "",
+                        dia: "",
+                        tienda: "",
+                        codigo: ""
+                    });
+                }
+
+                mostrarOverlay(false);
+                mostrarGaleria();
+                document.getElementById('btnExcel').style.display = 'inline-block';
+                document.getElementById('filters').style.display = 'flex';
+                document.getElementById('bulkActions').style.display = 'flex';
+                actualizarEstadisticas();
+                
+                document.getElementById('status').innerHTML = 
+                    '<div class="status success">✅ ¡Listo! ' + imagenes.length + 
+                    ' imágenes procesadas. Revisa y clasifica cada una.</div>';
+            } catch (error) {
+                mostrarOverlay(false);
+                alert("Error al procesar el ZIP: " + error.message);
+            }
         }
 
-        async function clasificarImagen(dataUrl) {
+        async function clasificarImagenRapido(dataUrl) {
             return new Promise((resolve) => {
                 const img = new Image();
                 img.onload = () => {
@@ -500,94 +583,28 @@
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imageData.data;
                     
-                    // Calcular nitidez (varianza de Laplaciano)
+                    // Calcular brillo promedio
                     let suma = 0;
-                    let count = 0;
                     for (let i = 0; i < data.length; i += 4) {
-                        const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
-                        suma += gray;
-                        count++;
+                        suma += data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
                     }
-                    const promedio = suma / count;
+                    const promedio = suma / (data.length / 4);
                     
+                    // Calcular varianza
                     let varianza = 0;
                     for (let i = 0; i < data.length; i += 4) {
                         const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
                         varianza += Math.pow(gray - promedio, 2);
                     }
-                    varianza /= count;
+                    varianza /= (data.length / 4);
                     
-                    // Calcular contraste
-                    let min = 255, max = 0;
-                    for (let i = 0; i < data.length; i += 4) {
-                        const gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
-                        if (gray < min) min = gray;
-                        if (gray > max) max = gray;
-                    }
-                    const contraste = max - min;
-                    
-                    // Clasificación: Si tiene buena nitidez y contraste -> Aprobada
-                    const aprobada = varianza > 200 && contraste > 50;
+                    // Si tiene buena varianza (no es uniforme) -> aprobada
+                    const aprobada = varianza > 300;
                     
                     resolve(aprobada ? 'approved' : 'rejected');
                 };
                 img.src = dataUrl;
             });
-        }
-
-        async function extraerDatos(dataUrl) {
-            try {
-                // Crear imagen para analizar solo la esquina inferior derecha
-                const img = new Image();
-                await new Promise((resolve) => {
-                    img.onload = resolve;
-                    img.src = dataUrl;
-                });
-                
-                // Recortar solo la esquina inferior derecha (donde están los datos)
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                const ancho = Math.min(img.width * 0.5, 400);
-                const alto = Math.min(img.height * 0.3, 200);
-                canvas.width = ancho;
-                canvas.height = alto;
-                ctx.drawImage(img, img.width - ancho, img.height - alto, ancho, alto, 0, 0, ancho, alto);
-                
-                const imagenRecortada = canvas.toDataURL();
-                
-                const result = await Tesseract.recognize(imagenRecortada, 'spa', {
-                    logger: () => {} // Sin logs para mayor velocidad
-                });
-                
-                const texto = result.data.text;
-                console.log("Texto OCR:", texto);
-                
-                // Extraer fecha
-                const fechaMatch = texto.match(/\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4}|\d{2}\/\d{2}\/\d{4}/);
-                const fecha = fechaMatch ? fechaMatch[0] : "No detectado";
-                
-                // Extraer día de la semana
-                const diasMatch = texto.match(/LUN|MAR|MIE|JUE|VIE|SAB|DOM/i);
-                const dia = diasMatch ? diasMatch[0].toUpperCase() : "No detectado";
-                
-                // Extraer CAV o nombre de tienda
-                const cavMatch = texto.match(/CAV[^0-9\n]*/i);
-                const tienda = cavMatch ? cavMatch[0].trim() : "No detectado";
-                
-                // Extraer MICO + número
-                const codigoMatch = texto.match(/MICO[D]?\d+/i);
-                const codigo = codigoMatch ? codigoMatch[0] : "No detectado";
-                
-                return { fecha, dia, tienda, codigo };
-            } catch (error) {
-                console.error("Error en OCR:", error);
-                return {
-                    fecha: "Error OCR",
-                    dia: "Error OCR",
-                    tienda: "Error OCR",
-                    codigo: "Error OCR"
-                };
-            }
         }
 
         function mostrarGaleria() {
@@ -608,11 +625,19 @@
                     </div>
                     <div class="image-info">
                         <div class="image-name">${img.nombre}</div>
-                        <div class="extracted-data">
-                            <div><span class="data-label">📅 Fecha:</span> ${img.datos.fecha}</div>
-                            <div><span class="data-label">📆 Día:</span> ${img.datos.dia}</div>
-                            <div><span class="data-label">🏪 Tienda:</span> ${img.datos.tienda}</div>
-                            <div><span class="data-label">🔢 Código:</span> ${img.datos.codigo}</div>
+                        <div class="data-inputs">
+                            <input type="text" placeholder="📅 Fecha (ej: 2025-12-03)" 
+                                value="${img.fecha}" 
+                                onchange="actualizarDato(${index}, 'fecha', this.value)">
+                            <input type="text" placeholder="📆 Día (ej: MIE)" 
+                                value="${img.dia}" 
+                                onchange="actualizarDato(${index}, 'dia', this.value)">
+                            <input type="text" placeholder="🏪 Tienda (ej: CAV LA REBECA)" 
+                                value="${img.tienda}" 
+                                onchange="actualizarDato(${index}, 'tienda', this.value)">
+                            <input type="text" placeholder="🔢 Código (ej: MICO00059)" 
+                                value="${img.codigo}" 
+                                onchange="actualizarDato(${index}, 'codigo', this.value)">
                         </div>
                         <div class="action-buttons">
                             <button class="btn-small btn-approve" onclick="cambiarClasificacion(${index}, 'approved')">
@@ -628,8 +653,24 @@
             });
         }
 
+        function actualizarDato(index, campo, valor) {
+            imagenes[index][campo] = valor;
+        }
+
         function cambiarClasificacion(index, nuevaClasificacion) {
             imagenes[index].clasificacion = nuevaClasificacion;
+            mostrarGaleria();
+            actualizarEstadisticas();
+        }
+
+        function aprobarTodas() {
+            imagenes.forEach(img => img.clasificacion = 'approved');
+            mostrarGaleria();
+            actualizarEstadisticas();
+        }
+
+        function rechazarTodas() {
+            imagenes.forEach(img => img.clasificacion = 'rejected');
             mostrarGaleria();
             actualizarEstadisticas();
         }
@@ -648,31 +689,42 @@
             document.getElementById('countRejected').textContent = rechazadas;
         }
 
-        async function generarExcel() {
+        function generarExcel() {
             if (imagenes.length === 0) {
                 alert("No hay imágenes procesadas.");
                 return;
             }
 
-            const datos = [["Archivo", "Estado", "Fecha", "Día", "Tienda", "Código", "Link"]];
+            const datos = [["Archivo", "Estado", "Fecha", "Día", "Tienda", "Código"]];
 
             imagenes.forEach(img => {
                 datos.push([
                     img.nombre,
                     img.clasificacion === 'approved' ? 'APROBADA' : 'RECHAZADA',
-                    img.datos.fecha,
-                    img.datos.dia,
-                    img.datos.tienda,
-                    img.datos.codigo,
-                    img.url || "Sin subir a GitHub"
+                    img.fecha || "",
+                    img.dia || "",
+                    img.tienda || "",
+                    img.codigo || ""
                 ]);
             });
 
             const ws = XLSX.utils.aoa_to_sheet(datos);
+            
+            // Ajustar ancho de columnas
+            ws['!cols'] = [
+                { wch: 30 }, // Archivo
+                { wch: 12 }, // Estado
+                { wch: 15 }, // Fecha
+                { wch: 10 }, // Día
+                { wch: 25 }, // Tienda
+                { wch: 15 }  // Código
+            ];
+            
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Validación");
 
-            XLSX.writeFile(wb, "validacion_imagenes.xlsx");
+            const fecha = new Date().toISOString().split('T')[0];
+            XLSX.writeFile(wb, `validacion_imagenes_${fecha}.xlsx`);
         }
 
         function mostrarOverlay(mostrar, titulo = "", texto = "") {
@@ -692,44 +744,7 @@
             progressBar.textContent = Math.round(porcentaje) + '%';
             document.getElementById('overlayText').textContent = texto;
         }
-
-        // Mejorar la carga de archivos con drag & drop
-        const uploadBox = document.querySelector('.upload-box');
-        const zipInput = document.getElementById('zipInput');
-        const fileName = document.getElementById('fileName');
-        
-        // Mostrar nombre del archivo cuando se selecciona
-        zipInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                fileName.textContent = `📦 Archivo seleccionado: ${e.target.files[0].name}`;
-                fileName.style.color = '#28a745';
-                fileName.style.fontWeight = 'bold';
-            }
-        });
-        
-        uploadBox.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadBox.style.borderColor = '#764ba2';
-            uploadBox.style.background = '#f8f9ff';
-        });
-        
-        uploadBox.addEventListener('dragleave', () => {
-            uploadBox.style.borderColor = '#667eea';
-            uploadBox.style.background = 'white';
-        });
-        
-        uploadBox.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadBox.style.borderColor = '#667eea';
-            uploadBox.style.background = 'white';
-            const files = e.dataTransfer.files;
-            if (files.length > 0 && files[0].name.endsWith('.zip')) {
-                zipInput.files = files;
-                fileName.textContent = `📦 Archivo seleccionado: ${files[0].name}`;
-                fileName.style.color = '#28a745';
-                fileName.style.fontWeight = 'bold';
-            }
-        });
     </script>
 </body>
 </html>
+
